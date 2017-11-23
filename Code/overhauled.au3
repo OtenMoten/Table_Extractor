@@ -1,3 +1,5 @@
+#Region ### START Library section ###
+
 #include <ButtonConstants.au3>
 #include <GUIConstantsEx.au3>
 #include <StaticConstants.au3>
@@ -22,15 +24,28 @@
 #include <OOoCalcConstants.au3>
 #include <ColorConstants.au3>
 
+#EndRegion ### START Library section ###
+
 #Region ### START Variables section ###
 
-Global $guiLoadingScreen, _
-		$guiProgressLoadingScreen, _
-		$i, _
-		$iPID, _
+; most only declaration ==> initializing in Func '_Start_Loading_Screen'
+Global $guiLoadingScreen, $guiProgressLoadingScreen, $guiMain, $guiEmbeddedBrowser, _
+		$lbHeader, _
+		$btnTabula, $btnMendeley, $btnOpenoffice, $btnWizard, $btnHome, $btnExitEmbedded, $btnExit, _
+		$oIE, $i, $iSavePos, _
+		$iPID, $sPID, _ ;$iPID for calling a function --- $sPID for internal use of Func '_Process_Tree_Close
 		$pathIniFile, _
 		$pathMainDir, _
-		$pathConfigDir = @MyDocumentsDir & "\Table_Extractor_Config"
+		$pathInstallFilesDir, _
+		$pathInternalDir, _
+		$pathTabulaDir, _
+		$pathPDFfromInternal, _
+		$pathConfigDir = @MyDocumentsDir & "\Table_Extractor_Config", _
+		$pathMendeleyBackup, _
+		$pathMendeleyBackupArchiveDir, _
+		$pathMendeleyPDFDataDir, _
+		$pathMendeleyExe, _
+		$exeScalc
 
 #EndRegion ### START Variables section ###
 
@@ -44,59 +59,174 @@ Opt("GUIOnEventMode", 1)
 #Region ### START Running section ###
 
 _Start_Loading_Screen()
-;_Enter_Ini_Details()
-;_Start_GUI_Main()
+_Enter_Ini_Details()
+_Start_GUI_Main()
 
 #EndRegion ### START Running section ###
 
-Func _Start_Loading_Screen()
+Func _Enter_Ini_Details()
 
-	If (FileFindNextFile(FileFindFirstFile($pathConfigDir & "\Table_Extractor.ini")) <> "Table_Extractor.ini") Then
+	If (IniRead($pathIniFile, "Trigger", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Trigger' in ini-file.") = "1") And _
+			(IniRead($pathIniFile, "Trigger", "Mendeley_PDFData", "Can't read key 'Mendeley_PDFData' from section 'Trigger' in ini-file.") = "1") And _
+			(IniRead($pathIniFile, "Trigger", "Mendeley_Backup_Archive", "Can't read key 'Mendeley_Backup_Archive' from section 'Trigger' in ini-file.") = "1") Then
 
-		If Not FileExists($pathConfigDir) Then
+		MsgBox($MB_SYSTEMMODAL, "Mendeley backup file", "The current used Mendeley backup file is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Paths' in ini-file."))
+		MsgBox($MB_SYSTEMMODAL, "Mendeley backup archive folder", "The current used Mendeley backup archive folder is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_Backup_Archive", "Can't read key 'Mendeley_Backup_Archive' from section 'Paths' in ini-file."))
+		MsgBox($MB_SYSTEMMODAL, "Mendeley PDFA data folder", "The current used Mendeley PDF data folder is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_PDFData", "Can't read key 'Mendeley_PDFdata' from section 'Paths' in ini-file."))
 
-			DirCreate($pathConfigDir)
-			$pathIniFile = $pathConfigDir & "\Table_Extractor.ini"
-			$pathMainDir = FileSelectFolder("Choose the installation directory", "C:\", $WS_POPUP)
-			IniWrite($pathIniFile, "Information", "Explanation", "This file contains parameters for the Software 'Table_Extractor'")
-			IniWrite($pathIniFile, "Paths", "MainDir", $pathMainDir)
-			IniWrite($pathIniFile, "Trigger", "MainDir", "1")
+	Else
 
-		Else
-
-			$pathIniFile = $pathConfigDir & "\Table_Extractor.ini"
-			$pathMainDir = FileSelectFolder("Choose the installation directory", "C:\", $WS_POPUP)
-			IniWrite($pathIniFile, "Information", "Explanation", "This file contains parameters for the Software 'Table_Extractor'")
-			IniWrite($pathIniFile, "Paths", "MainDir", $pathMainDir)
-			IniWrite($pathIniFile, "Trigger", "MainDir", "1")
-
-		EndIf
+		Sleep(100)
+		IniWrite($pathIniFile, "Paths", "Mendeley_Backup", FileOpenDialog("Open the Mendeley backup file", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\", "All (*.zip)"))
+		IniWrite($pathIniFile, "Paths", "Mendeley_Backup_Archive", FileSelectFolder("Select the Mendeley backup archive folder ", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\"))
+		IniWrite($pathIniFile, "Paths", "Mendeley_PDFData", FileSelectFolder("Select the PDF data folder", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\"))
+		IniWrite($pathIniFile, "Trigger", "Mendeley_Backup", "1")
+		IniWrite($pathIniFile, "Trigger", "Mendeley_Backup_Archive", "1")
+		IniWrite($pathIniFile, "Trigger", "Mendeley_PDFData", "1")
 
 	EndIf
 
-	$pathIniFile = $pathConfigDir & "\Table_Extractor.ini"
-	$pathMainDir = IniRead($pathIniFile, "Paths", "MainDir", "Can't read key 'MainDir' from section 'Paths' in " & ($pathConfigDir & "\Table_Extractor.ini"))
+EndFunc   ;==>_Enter_Ini_Details
 
-	;==> Values for altering the progressbar are triggered in '_Start_File_Install()' GUICtrlSetData($guiProgressLoadingScreen, $i)
-	$guiLoadingScreen = GUICreate("Starting Table Extractor", 300, 40, 100, 200)
-	GUISetOnEvent($GUI_EVENT_CLOSE, "_On_Close", $guiLoadingScreen)
-	$guiProgressLoadingScreen = GUICtrlCreateProgress(10, 10, 280, 20)
-	GUICtrlSetColor($guiProgressLoadingScreen, $COLOR_GREEN) ; not working with Windows XP Style
-	GUISetState(@SW_SHOW, $guiLoadingScreen)
+Func _On_Button()
 
-	_Start_File_Install()
+	Switch @GUI_CtrlId ;Check which button sent the message
 
-	GUIDelete($guiLoadingScreen)
+		Case $btnTabula
 
-	;_Process_Close_Tree($iPID)
+			;_BlockinputEx(1)
 
-EndFunc   ;==>_Start_Loading_Screen
+			FileChangeDir($pathTabulaDir)
+			$iPID = Run(@ComSpec & " /k tabula.exe", "", @SW_HIDE) ; Execute the Tabula-Win-1.1.1 software (/k means 'keep' (without it does not executed))
+			FileChangeDir($pathMainDir)
+
+			$guiLoadingScreen = GUICreate("Starting server ...", 302, 65, 100, 200, $WS_BORDER)
+			$guiProgressLoadingScreen = GUICtrlCreateProgress(10, 10, 280, 20)
+			GUICtrlSetColor(-1, 32250) ; not working with Windows XP Style
+			GUISetState(@SW_SHOW)
+
+			For $i = $iSavePos To 100
+
+				GUICtrlSetData($guiProgressLoadingScreen, $i)
+
+				Sleep(200)
+
+			Next
+
+			GUIDelete($guiProgressLoadingScreen)
+			GUIDelete($guiLoadingScreen)
+
+			_Start_Embedded_Browser()
+
+
+			;_BlockinputEx(0)
+
+		Case $btnWizard
+			#cs
+				_Start_Mendeley_with_AutoImport()
+
+				$path_pdfFromInternal = _Handoff_PDF_From_Mendeley_To_Internal()
+
+				_Start_PDFeditor_with_file($path_pdfFromInternal)
+
+				WinWaitClose("PDF Bearbeiten")
+
+				$path_csvFromInternal = _Start_Tabula_with_file($path_pdfFromInternal)
+
+				_Start_table_calculator_with_csv($path_csvFromInternal)
+
+			#ce
+		Case $btnOpenoffice
+			#cs
+				Run($path_mainDir & $exe_scalc, "", @SW_SHOW)
+			#ce
+		Case $btnMendeley
+
+			_Start_Mendeley_with_AutoImport()
+
+			WinWaitClose("Mendeley Desktop")
+
+			If MsgBox(4, "Any changes?", "Do you want to create a new backup file?") = 6 Then
+
+				_Start_Mendeley_Create_Backup()
+
+			EndIf
+
+		Case $btnExit
+
+			_Process_Tree_Close($iPID)
+			GUIDelete($guiMain)
+			Exit
+
+		Case $btnHome
+
+			_IENavigate($oIE, "http://127.0.0.1:8080")
+
+		Case $btnExitEmbedded
+
+			_Process_Tree_Close($iPID)
+			GUIDelete($guiEmbeddedBrowser)
+
+
+	EndSwitch
+
+EndFunc   ;==>_On_Button
+
+Func _On_Close()
+
+	Switch @GUI_WinHandle
+
+		Case $guiMain
+
+			_Process_Tree_Close($iPID)
+			GUIDelete($guiMain)
+			Exit
+
+		Case $guiEmbeddedBrowser
+
+			_Process_Tree_Close($iPID)
+			GUIDelete($guiEmbeddedBrowser)
+
+		Case $guiLoadingScreen
+
+			GUIDelete($guiLoadingScreen)
+			Exit
+
+	EndSwitch
+
+EndFunc   ;==>_On_Close
+
+Func _Process_Tree_Close($sPID)
+
+	If IsString($sPID) Then $sPID = ProcessExists($sPID)
+	If Not $sPID Then Return SetError(1, 0, 0)
+
+	Return Run(@ComSpec & " /c taskkill /F /PID " & $sPID & " /T", @SystemDir, @SW_HIDE)
+
+EndFunc   ;==>_Process_Tree_Close
+
+Func _Start_Embedded_Browser()
+
+	$oIE = _IECreateEmbedded()
+	$guiEmbeddedBrowser = GUICreate("Embedded Web-Browser", @DesktopWidth, @DesktopHeight, 0, 0, $WS_POPUP)
+	GUISetOnEvent($GUI_EVENT_CLOSE, "_On_Close")
+	GUICtrlCreateObj($oIE, 10, 40, (@DesktopWidth - 20), (@DesktopHeight - 50))
+	$btnHome = GUICtrlCreateButton("Home", 10, 5, 100, 30)
+	GUICtrlSetOnEvent(-1, "_On_Button")
+	$btnExitEmbedded = GUICtrlCreateButton("Exit", 1810, 5, 100, 30)
+	GUICtrlSetOnEvent(-1, "_On_Button")
+	GUISetState(@SW_SHOW, $guiEmbeddedBrowser)
+	_IENavigate($oIE, "http://127.0.0.1:8080")
+	_IEAction($oIE, "stop")
+	_IELinkClickByText($oIE, "My Files")
+
+	Return $oIE
+
+EndFunc   ;==>_Start_Embedded_Browser
 
 Func _Start_File_Install()
 
 	Local _
-			$pathInstallFilesDir = $pathMainDir & "\InstallFiles", _
-			$pathTableExtractorInternalDir = $pathMainDir & "\Internal", _
 			$pathExe7zip = $pathInstallFilesDir & "\7za.exe", _
 			$pathMendeleyDir = $pathInstallFilesDir & "\Mendeley", _
 			$pathTabulaDir = $pathInstallFilesDir & "\Tabula-Win-1.1.1", _
@@ -115,9 +245,9 @@ Func _Start_File_Install()
 
 	GUICtrlSetData($guiProgressLoadingScreen, 5)
 
-	If Not FileExists($pathTableExtractorInternalDir) Then
+	If Not FileExists($pathInternalDir) Then
 
-		DirCreate($pathTableExtractorInternalDir)
+		DirCreate($pathInternalDir)
 
 	EndIf
 
@@ -242,125 +372,279 @@ Func _Start_File_Install()
 
 EndFunc   ;==>_Start_File_Install
 
-#cs
-	Func _On_Button()
+Func _Start_GUI_Main()
+
+	#cs - - - Path of pictures - - -
+		"P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\ICON_Mendeley.png"
+		"P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\LOGO_Tabula.png"
+		"P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\LOGO_UBA.png"
+		"P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\ICON_Wizard.png"
+		"P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\ICON_OpenOffice.png"
+	#ce - - - Path of pictures - - -
 
 	Local _
-	$exe_scalc = "\PDF_Extractor_InstallFiles\OpenOffice\program\scalc.exe", _
-	$path_tabulaDir = $path_installFilesDir & "\Tabula-Win-1.1.1", _
-	$path_pdfFromInternal
+			$pathMendeleyPic = $pathInstallFilesDir & "\ICON_Mendeley.png", _
+			$pathTabulaPic = $pathInstallFilesDir & "\LOGO_Tabula.png", _
+			$pathUbaPic = $pathInstallFilesDir & "\LOGO_UBA.png", _
+			$pathWizardPic = $pathInstallFilesDir & "\ICON_Wizard.png", _
+			$pathOpenofficescalcPic = $pathInstallFilesDir & "\ICON_OpenOffice.png"
 
-	Switch @GUI_CtrlId ;Check which button sent the message
+	If Not FileExists($pathMendeleyPic) Then
 
-	Case $btn_tabula
-
-	;_BlockinputEx(1)
-
-	FileChangeDir($path_mainDir & $path_tabulaDir)
-	$iPID = Run(@ComSpec & " /k tabula.exe", "", @SW_HIDE) ; Execute the Tabula-Win-1.1.1 software (/k means 'keep' (without it does not executed))
-
-	$gui_loading_screen = GUICreate("Starting server ...", 300, 40, 100, 200)
-	$guiProgressLoadingScreen = GUICtrlCreateProgress(10, 10, 280, 20)
-	GUISetOnEvent($GUI_EVENT_CLOSE, "_On_Close")
-	GUICtrlSetColor(-1, 32250) ; not working with Windows XP Style
-	GUISetState(@SW_SHOW)
-
-	For $i = $iSavePosStartingServer To 100
-
-	GUICtrlSetData($guiProgressLoadingScreen, $i)
-
-	Sleep(200)
-
-	Next
-
-	GUIDelete($gui_loading_screen)
-
-	_Start_Embedded_Browser()
-
-	;_BlockinputEx(0)
-
-	Case $btn_wizard
-
-	_Start_Mendeley_with_AutoImport()
-
-	$path_pdfFromInternal = _Handoff_PDF_From_Mendeley_To_Internal()
-
-	_Start_PDFeditor_with_file($path_pdfFromInternal)
-
-	WinWaitClose("PDF Bearbeiten")
-
-	$path_csvFromInternal = _Start_Tabula_with_file($path_pdfFromInternal)
-
-	_Start_table_calculator_with_csv($path_csvFromInternal)
-
-	Case $btn_pdfbearbeiten
-
-	Run($path_mainDir & $exe_pdfbearbeiten, "", @SW_SHOW)
-
-	Case $btn_openoffice
-
-	Run($path_mainDir & $exe_scalc, "", @SW_SHOW)
-
-	Case $btn_mendeley
-
-	_Start_Mendeley_with_AutoImport()
-
-	WinWaitClose("Mendeley Desktop")
-
-	If MsgBox(4, "Any changes?", "Do you want to create a new backup file?") = 6 Then
-
-	_Start_Mendeley_Create_Backup()
+		FileInstall("P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\ICON_Mendeley.png", $pathMendeleyPic)
 
 	EndIf
 
-	Case $btn_exit_main
+	If Not FileExists($pathTabulaPic) Then
 
-	_Process_Close_Tree($iPID)
-	GUIDelete($gui_main)
-	Exit
+		FileInstall("P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\LOGO_Tabula.png", $pathTabulaPic)
 
-	Case $btn_home
+	EndIf
 
-	_IENavigate($oIE, "http://127.0.0.1:8080")
-	_IEAction($oIE, "stop")
-	_CheckError("Home", @error, @extended)
+	If Not FileExists($pathUbaPic) Then
 
-	Case $btn_exit_embedded
+		FileInstall("P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\LOGO_UBA.png", $pathUbaPic)
 
-	GUIDelete($gui_webbrowser)
+	EndIf
 
-	EndSwitch
+	If Not FileExists($pathWizardPic) Then
 
-	EndFunc   ;==>_On_Button
-#ce
+		FileInstall("P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\ICON_Wizard.png", $pathWizardPic)
 
-Func _On_Close()
+	EndIf
 
-	Switch @GUI_WinHandle
+	If Not FileExists($pathOpenofficescalcPic) Then
 
-		;Case $gui_main
+		FileInstall("P:\FG_IV_2.2\Projects\Table_Extractor\External_Software\Pictures\ICON_OpenOffice.png", $pathOpenofficescalcPic)
 
-		;GUIDelete($gui_main)
-		;Exit
+	EndIf
 
-		;Case $gui_webbrowser
+	$guiMain = GUICreate("Table Extractor", @DesktopWidth, @DesktopHeight, 0, 0, $WS_POPUP)
+	GUISetOnEvent($GUI_EVENT_CLOSE, "_On_Close")
 
-		;GUIDelete($gui_webbrowser)
+	$lbHeader = GUICtrlCreateLabel("Software for extracting and converting tables from a PDF file", 10, 10, 700, 30)
+	GUICtrlSetFont(-1, 16, 600, 0, "MS Sans Serif")
+	GUICtrlSetColor(-1, 0x000000)
 
-		Case $guiLoadingScreen
+	GUISetState(@SW_SHOW, $guiMain)
 
-			GUIDelete($guiLoadingScreen)
-			Exit
+	_GUICtrlPic_Create($pathUbaPic, @DesktopWidth / 1.2, @DesktopHeight / 1201, @DesktopWidth / 6, @DesktopHeight / 7)
+	_GUICtrlPic_Create($pathMendeleyPic, @DesktopWidth / 20, @DesktopHeight / 10, @DesktopWidth / 5, @DesktopHeight / 3, BitOR($SS_CENTERIMAGE, $SS_SUNKEN, $SS_NOTIFY), Default)
+	_GUICtrlPic_Create($pathTabulaPic, @DesktopWidth / 20, @DesktopHeight / 1.85, @DesktopWidth / 5, @DesktopHeight / 3, BitOR($SS_CENTERIMAGE, $SS_SUNKEN, $SS_NOTIFY), Default)
+	_GUICtrlPic_Create($pathOpenofficescalcPic, @DesktopWidth / 3, @DesktopHeight / 1.8, @DesktopWidth / 5, @DesktopHeight / 3, BitOR($SS_CENTERIMAGE, $SS_SUNKEN, $SS_NOTIFY), Default)
 
-	EndSwitch
+	$btnTabula = GUICtrlCreateButton("Tabula", (@DesktopWidth / 20), (@DesktopHeight / 1.124), (@DesktopWidth / 5), (@DesktopHeight / 15))
+	GUICtrlSetFont(-1, 12, 600, 0, "Leelawadee")
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetOnEvent(-1, "_On_Button")
 
-EndFunc   ;==>_On_Close
+	$btnMendeley = GUICtrlCreateButton("Mendeley", (@DesktopWidth / 20), (@DesktopHeight / 2.3), (@DesktopWidth / 5), (@DesktopHeight / 15))
+	GUICtrlSetFont(-1, 12, 600, 0, "Leelawadee")
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetOnEvent(-1, "_On_Button")
 
-Func _Process_Close_Tree($sPID)
+	$btnOpenoffice = GUICtrlCreateButton("OpenOffice", (@DesktopWidth / 3), (@DesktopHeight / 1.124), (@DesktopWidth / 5), (@DesktopHeight / 15))
+	GUICtrlSetFont(-1, 12, 600, 0, "Leelawadee")
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetOnEvent(-1, "_On_Button")
 
-	If IsString($sPID) Then $sPID = ProcessExists($sPID)
-	If Not $sPID Then Return SetError(1, 0, 0)
+	$btnWizard = GUICtrlCreateButton("Assistant", (@DesktopWidth / 1.2), (@DesktopHeight / 6), (@DesktopWidth / 6), (@DesktopHeight / 25), $BS_ICON)
+	GUICtrlSetFont(-1, 12, 600, 0, "Leelawadee")
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetOnEvent(-1, "_On_Button")
 
-	Return Run(@ComSpec & " /c taskkill /F /PID " & $sPID & " /T", @SystemDir, @SW_HIDE)
+	$btnExit = GUICtrlCreateButton("Exit", (@DesktopWidth / 1.113), (@DesktopHeight / 1.075), (@DesktopWidth / 10), (@DesktopHeight / 15))
+	GUICtrlSetFont(-1, 12, 600, 0, "Leelawadee")
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetOnEvent(-1, "_On_Button")
 
-EndFunc   ;==>_Process_Close_Tree
+	While 1
+		Sleep(10)
+	WEnd
+
+EndFunc   ;==>_Start_GUI_Main
+
+Func _Start_Loading_Screen()
+
+	If (FileFindNextFile(FileFindFirstFile($pathConfigDir & "\*.*")) <> "Table_Extractor.ini") Then
+
+		If Not FileExists($pathConfigDir) Then
+
+			DirCreate($pathConfigDir)
+			$pathIniFile = $pathConfigDir & "\Table_Extractor.ini"
+			$pathMainDir = FileSelectFolder("Choose the installation directory", "C:\", $WS_POPUP)
+			IniWrite($pathIniFile, "Information", "Explanation", "This file contains parameters for the Software 'Table_Extractor'")
+			IniWrite($pathIniFile, "Paths", "Main_Dir", $pathMainDir)
+			IniWrite($pathIniFile, "Trigger", "Main_Dir", "1")
+
+		Else
+
+			$pathIniFile = $pathConfigDir & "\Table_Extractor.ini"
+			$pathMainDir = FileSelectFolder("Choose the installation directory", "C:\", $WS_POPUP)
+			IniWrite($pathIniFile, "Information", "Explanation", "This file contains parameters for the Software 'Table_Extractor'")
+			IniWrite($pathIniFile, "Paths", "Main_Dir", $pathMainDir)
+			IniWrite($pathIniFile, "Trigger", "Main_Dir", "1")
+
+		EndIf
+
+	EndIf
+
+	; initializing addidtional global variables
+	$pathIniFile = $pathConfigDir & "\Table_Extractor.ini"
+	$pathMainDir = IniRead($pathIniFile, "Paths", "Main_Dir", "Can't read key 'Main_Dir' from section 'Paths' in " & ($pathConfigDir & "\Table_Extractor.ini"))
+	$pathInstallFilesDir = $pathMainDir & "\InstallFiles"
+	$pathInternalDir = $pathMainDir & "\Internal"
+	$pathTabulaDir = $pathInstallFilesDir & "\Tabula-Win-1.1.1"
+	$exeScalc = $pathInstallFilesDir & "\OpenOffice\program\scalc.exe"
+
+	;==> Values for altering the progressbar are triggered in '_Start_File_Install()' GUICtrlSetData($guiProgressLoadingScreen, $i)
+	$guiLoadingScreen = GUICreate("Starting Table Extractor", 300, 40, 100, 200)
+	GUISetOnEvent($GUI_EVENT_CLOSE, "_On_Close", $guiLoadingScreen)
+	$guiProgressLoadingScreen = GUICtrlCreateProgress(10, 10, 280, 20)
+	GUICtrlSetColor($guiProgressLoadingScreen, $COLOR_GREEN) ; not working with Windows XP Style
+	GUISetState(@SW_SHOW, $guiLoadingScreen)
+
+	_Start_File_Install()
+
+	GUIDelete($guiProgressLoadingScreen)
+	GUIDelete($guiLoadingScreen)
+
+EndFunc   ;==>_Start_Loading_Screen
+
+Func _Start_Mendeley_Create_Backup()
+
+	Run($pathMendeleyExe, "", @SW_SHOW)
+
+	$pathMendeleyBackup = IniRead($pathIniFile, "Paths", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Paths' in ini-file.")
+	$pathMendeleyBackupArchiveDir = IniRead($pathIniFile, "Paths", "Mendeley_Backup_Archive", "Can't read key 'Mendeley_Backup_Archive' from section 'Paths' in ini-file.")
+
+	_ClipBoard_SetData($pathMendeleyBackup)
+
+	$time = _Date_Time_SystemTimeToFileTime(_Date_Time_GetSystemTime())
+	$time = _Date_Time_FileTimeToStr($time)
+	$time = StringReplace($time, ":", "_")
+	$time = StringReplace($time, "/", "_")
+	$time = StringReplace($time, " ", "_")
+
+	FileMove($pathMendeleyBackup, $pathMendeleyBackupArchiveDir & "\" & "Archive_" & $time & ".zip", 1)
+	Sleep(1000)
+
+	WinWaitActive("Mendeley Desktop")
+	Sleep(3000)
+	Send("{ALT}")
+	Sleep(200)
+	Send("{LEFT}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{ENTER}")
+	Sleep(500)
+	Send("^v")
+	Sleep(500)
+	Send("{ENTER}")
+	Sleep(500)
+	Send("{ESC}")
+	Sleep(500)
+	Send("!{F4}")
+
+EndFunc   ;==>_Start_Mendeley_Create_Backup
+
+Func _Start_Mendeley_with_AutoImport()
+
+	$pathMendeleyExe = $pathInstallFilesDir & "\Mendeley\Mendeley Desktop\MendeleyDesktop.exe"
+
+	Run($pathMendeleyExe, "", @SW_SHOW)
+
+	$pathMendeleyBackup = IniRead($pathIniFile, "Paths", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Paths' in ini-file.")
+	_ClipBoard_SetData($pathMendeleyBackup)
+	WinWaitActive("Mendeley Desktop")
+	Sleep(3000)
+	Send("{ALT}")
+	Sleep(200)
+	Send("{LEFT}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{RIGHT}")
+	Sleep(200)
+	Send("{ENTER}")
+	Sleep(200)
+	Send("{UP}")
+	Sleep(200)
+	Send("{ENTER}")
+	Sleep(1000)
+	Send("^v")
+	Sleep(500)
+	Send("{ENTER}")
+	WinWaitActive("Restore Backup")
+	Sleep(500)
+	Send("{TAB}{SPACE}")
+	Sleep(500)
+	Send("{TAB}{TAB}{SPACE}")
+	Sleep(500)
+	Send("{ENTER}")
+	WinWaitActive("Welcome to Mendeley Desktop")
+	Sleep(500)
+	Send("{ENTER}")
+
+	WinWaitActive("Mendeley Desktop")
+	Sleep(3000)
+	$pathMendeleyPDFDataDir = IniRead($pathIniFile, "Paths", "Mendeley_PDFData", "Can't read key 'Mendeley_PDFData' from section 'Paths' in ini-file.")
+	_ClipBoard_SetData($pathMendeleyPDFDataDir)
+	Send("{ALT}")
+	Sleep(200)
+	Send("{LEFT}")
+	Sleep(200)
+	Send("{LEFT}")
+	Sleep(200)
+	Send("{DOWN}")
+	Sleep(200)
+	Send("{UP}")
+	Sleep(200)
+	Send("{ENTER}")
+	Sleep(500)
+	Send("{RIGHT}")
+	Sleep(200)
+	Send("{RIGHT}")
+	Sleep(200)
+	Send("{TAB}")
+	Sleep(200)
+	Send("{SPACE}")
+	Sleep(500)
+	Send("{TAB}")
+	Sleep(200)
+	Send("^v")
+	Sleep(200)
+	Send("{ENTER}")
+	Sleep(500)
+	Send("{LEFT}")
+	Sleep(200)
+	Send("{ENTER}")
+
+EndFunc   ;==>_Start_Mendeley_with_AutoImport
