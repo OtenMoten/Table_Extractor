@@ -32,7 +32,7 @@
 Global $guiLoadingScreen, $guiProgressLoadingScreen, $guiMain, $guiEmbeddedBrowser, _
 		$lbHeader, _
 		$btnTabula, $btnMendeley, $btnOpenoffice, $btnWizard, $btnHome, $btnExitEmbedded, $btnExit, _
-		$oIE, $i, $iSavePos, _
+		$oIE, $oObject, $i, $iSavePos, _
 		$iPID, $sPID, _ ;$iPID for calling a function --- $sPID for internal use of Func '_Process_Tree_Close
 		$pathIniFile, _
 		$pathMainDir, _
@@ -40,12 +40,13 @@ Global $guiLoadingScreen, $guiProgressLoadingScreen, $guiMain, $guiEmbeddedBrows
 		$pathInternalDir, _
 		$pathTabulaDir, _
 		$pathPDFfromInternal, _
+		$pathCSVfromInternal, _
 		$pathConfigDir = @MyDocumentsDir & "\Table_Extractor_Config", _
 		$pathMendeleyBackup, _
 		$pathMendeleyBackupArchiveDir, _
-		$pathMendeleyPDFDataDir, _
+		$pathMendeleyPDFdataDir, _
 		$pathMendeleyExe, _
-		$exeScalc
+		$pathScalcExe
 
 #EndRegion ### START Variables section ###
 
@@ -67,34 +68,103 @@ _Start_GUI_Main()
 Func _Enter_Ini_Details()
 
 	If (IniRead($pathIniFile, "Trigger", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Trigger' in ini-file.") = "1") And _
-			(IniRead($pathIniFile, "Trigger", "Mendeley_PDFData", "Can't read key 'Mendeley_PDFData' from section 'Trigger' in ini-file.") = "1") And _
+			(IniRead($pathIniFile, "Trigger", "Mendeley_PDFdata", "Can't read key 'Mendeley_PDFdata' from section 'Trigger' in ini-file.") = "1") And _
 			(IniRead($pathIniFile, "Trigger", "Mendeley_Backup_Archive", "Can't read key 'Mendeley_Backup_Archive' from section 'Trigger' in ini-file.") = "1") Then
 
-		MsgBox($MB_SYSTEMMODAL, "Mendeley backup file", "The current used Mendeley backup file is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Paths' in ini-file."))
-		MsgBox($MB_SYSTEMMODAL, "Mendeley backup archive folder", "The current used Mendeley backup archive folder is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_Backup_Archive", "Can't read key 'Mendeley_Backup_Archive' from section 'Paths' in ini-file."))
-		MsgBox($MB_SYSTEMMODAL, "Mendeley PDFA data folder", "The current used Mendeley PDF data folder is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_PDFData", "Can't read key 'Mendeley_PDFdata' from section 'Paths' in ini-file."))
+		;MsgBox($MB_SYSTEMMODAL, "Mendeley backup file", "The current used Mendeley backup file is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_Backup", "Can't read key 'Mendeley_Backup' from section 'Paths' in ini-file."))
+		;MsgBox($MB_SYSTEMMODAL, "Mendeley backup archive folder", "The current used Mendeley backup archive folder is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_Backup_Archive", "Can't read key 'Mendeley_Backup_Archive' from section 'Paths' in ini-file."))
+		;MsgBox($MB_SYSTEMMODAL, "Mendeley PDFA data folder", "The current used Mendeley PDF data folder is stored at: " & IniRead($pathIniFile, "Paths", "Mendeley_PDFdata", "Can't read key 'Mendeley_PDFdata' from section 'Paths' in ini-file."))
 
 	Else
 
 		Sleep(100)
 		IniWrite($pathIniFile, "Paths", "Mendeley_Backup", FileOpenDialog("Open the Mendeley backup file", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\", "All (*.zip)"))
 		IniWrite($pathIniFile, "Paths", "Mendeley_Backup_Archive", FileSelectFolder("Select the Mendeley backup archive folder ", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\"))
-		IniWrite($pathIniFile, "Paths", "Mendeley_PDFData", FileSelectFolder("Select the PDF data folder", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\"))
+		IniWrite($pathIniFile, "Paths", "Mendeley_PDFdata", FileSelectFolder("Select the PDF data folder", "\\gruppende\IV2.2\Int\WRMG\Table_Extractor\"))
 		IniWrite($pathIniFile, "Trigger", "Mendeley_Backup", "1")
 		IniWrite($pathIniFile, "Trigger", "Mendeley_Backup_Archive", "1")
-		IniWrite($pathIniFile, "Trigger", "Mendeley_PDFData", "1")
+		IniWrite($pathIniFile, "Trigger", "Mendeley_PDFdata", "1")
 
 	EndIf
 
 EndFunc   ;==>_Enter_Ini_Details
+
+Func _Send_PDF_From_Mendeley_To_InternalDir()
+
+	Local $foldernameMendeleyPDFdataDir, _
+			$arrayPathMendeleyPDFdataDir, _
+			$nameOfPDF, _
+			$arrayNameOfPDF, _
+			$trigger = True
+
+	$arrayPathMendeleyPDFdataDir = StringSplit($pathMendeleyPDFdataDir, "\", 2)
+
+	For $i = 0 To (UBound($arrayPathMendeleyPDFdataDir) - 1) Step +1
+
+		If ($i) = (UBound($arrayPathMendeleyPDFdataDir) - 1) Then
+
+			$foldernameMendeleyPDFdataDir = $arrayPathMendeleyPDFdataDir[$i]
+
+		EndIf
+
+	Next
+
+	While ($trigger = True)
+
+		Sleep(50)
+
+		If WinActive($foldernameMendeleyPDFdataDir) = True Then
+
+			Sleep(1000)
+
+			Send("^c")
+
+			Sleep(1000)
+
+			$arrayPathMendeleyPDF= StringSplit(ClipGet(), "\", 2)
+
+			For $i = 0 To (UBound($arrayPathMendeleyPDF) - 1) Step +1
+
+				If ($i) = (UBound($arrayPathMendeleyPDF) - 1) Then
+
+					$nameOfPDF = $arrayPathMendeleyPDF[$i]
+
+				EndIf
+
+			Next
+
+			Sleep(1000)
+
+			FileCopy($pathMendeleyPDFdataDir & "\" & $nameOfPDF, $pathInternalDir, 1)
+
+			While _WinAPI_FileInUse($pathInternalDir & "\" & $nameOfPDF) = True
+
+				Sleep(1000)
+
+			WEnd
+
+			$trigger = False
+
+			Sleep(500)
+
+			WinClose($foldernameMendeleyPDFdataDir)
+
+		EndIf
+
+	WEnd
+
+	WinWaitActive("Mendeley Desktop")
+	Send("!{F4}")
+
+	Return $pathInternalDir & "\" & $nameOfPDF
+
+EndFunc   ;==>_Handoff_PDF_From_Mendeley_To_Internal
 
 Func _On_Button()
 
 	Switch @GUI_CtrlId ;Check which button sent the message
 
 		Case $btnTabula
-
-			;_BlockinputEx(1)
 
 			FileChangeDir($pathTabulaDir)
 			$iPID = Run(@ComSpec & " /k tabula.exe", "", @SW_HIDE) ; Execute the Tabula-Win-1.1.1 software (/k means 'keep' (without it does not executed))
@@ -118,28 +188,26 @@ Func _On_Button()
 
 			_Start_Embedded_Browser()
 
-
-			;_BlockinputEx(0)
-
 		Case $btnWizard
+
+			_Start_Mendeley_with_AutoImport()
+
+			$pathPDFfromInternal = _Send_PDF_From_Mendeley_To_InternalDir()
+
+			MsgBox($MB_SYSTEMMODAL, "$pathPDFfromInternal", $pathPDFfromInternal)
+
+			$pathCSVfromInternal = _Start_Tabula_with_file($pathPDFfromInternal)
+
 			#cs
-				_Start_Mendeley_with_AutoImport()
-
-				$path_pdfFromInternal = _Handoff_PDF_From_Mendeley_To_Internal()
-
-				_Start_PDFeditor_with_file($path_pdfFromInternal)
-
-				WinWaitClose("PDF Bearbeiten")
-
-				$path_csvFromInternal = _Start_Tabula_with_file($path_pdfFromInternal)
-
-				_Start_table_calculator_with_csv($path_csvFromInternal)
+				_Start_table_calculator_with_csv($pathCSVfromInternal)
 
 			#ce
 		Case $btnOpenoffice
-			#cs
-				Run($path_mainDir & $exe_scalc, "", @SW_SHOW)
-			#ce
+
+			$pathScalcExe = $pathInstallFilesDir & "\OpenOffice\program\scalc.exe"
+
+			Run($pathScalcExe, "", @SW_SHOW)
+
 		Case $btnMendeley
 
 			_Start_Mendeley_with_AutoImport()
@@ -166,7 +234,6 @@ Func _On_Button()
 
 			_Process_Tree_Close($iPID)
 			GUIDelete($guiEmbeddedBrowser)
-
 
 	EndSwitch
 
@@ -612,11 +679,15 @@ Func _Start_Mendeley_with_AutoImport()
 	WinWaitActive("Welcome to Mendeley Desktop")
 	Sleep(500)
 	Send("{ENTER}")
+	Sleep(1000)
+	WinActivate("Mendeley Desktop")
+	WinWaitActive("Mendeley Desktop")
 
 	WinWaitActive("Mendeley Desktop")
 	Sleep(3000)
-	$pathMendeleyPDFDataDir = IniRead($pathIniFile, "Paths", "Mendeley_PDFData", "Can't read key 'Mendeley_PDFData' from section 'Paths' in ini-file.")
-	_ClipBoard_SetData($pathMendeleyPDFDataDir)
+	$pathMendeleyPDFdataDir = IniRead($pathIniFile, "Paths", "Mendeley_PDFdata", "Can't read key 'Mendeley_PDFdata' from section 'Paths' in ini-file.")
+	_ClipBoard_SetData($pathMendeleyPDFdataDir)
+
 	Send("{ALT}")
 	Sleep(200)
 	Send("{LEFT}")
@@ -644,7 +715,86 @@ Func _Start_Mendeley_with_AutoImport()
 	Send("{ENTER}")
 	Sleep(500)
 	Send("{LEFT}")
-	Sleep(200)
+	Sleep(500)
 	Send("{ENTER}")
 
 EndFunc   ;==>_Start_Mendeley_with_AutoImport
+
+Func _Start_Tabula_with_file($pathPDFfile)
+
+	Local $pathTabulaDir = $pathInstallFilesDir & "\Tabula-Win-1.1.1", $pathCSVfile
+
+	FileChangeDir($pathTabulaDir)
+	$iPID = Run(@ComSpec & " /k tabula.exe", "", @SW_HIDE) ; Execute the Tabula-Win-1.1.1 software (/k means 'keep' (without it does not executed))
+
+	$guiLoadingScreen = GUICreate("Starting server ...", 300, 40, 100, 200)
+	$guiProgressLoadingScreen = GUICtrlCreateProgress(10, 10, 280, 20)
+	GUISetOnEvent($GUI_EVENT_CLOSE, "_On_Close")
+	GUICtrlSetColor(-1, 32250) ; not working with Windows XP Style
+	GUISetState(@SW_SHOW)
+
+	$iSavePos = 0
+
+	For $i = $iSavePos To 100
+
+		GUICtrlSetData($guiProgressLoadingScreen, $i)
+
+		Sleep(200)
+
+	Next
+
+	GUIDelete($guiLoadingScreen)
+
+	$oIE = _Start_Embedded_Browser()
+
+	sleep(2000)
+
+	MsgBox($MB_SYSTEMMODAL, "ClipPut", $pathPDFfile)
+
+	ClipPut($pathPDFfile)
+
+	$oObject = _IEGetObjByName($oIE, "files[]")
+	_IEAction($oObject, "click")
+
+	$pathCSVfile = StringReplace($pathPDFfile, ".pdf", ".csv")
+
+	Local $arrayPathCSVfile = StringSplit($pathCSVfile, "\", 2)
+	Local $temp
+
+	For $i = 0 To (UBound($arrayPathCSVfile) - 1) Step +1
+
+		If ($i) = (UBound($arrayPathCSVfile) - 1) Then
+
+			$arrayPathCSVfile[$i] = StringReplace($arrayPathCSVfile[$i], $arrayPathCSVfile[$i], "tabula-" & $arrayPathCSVfile[$i])
+			$arrayPathCSVfile[$i] = StringReplace($arrayPathCSVfile[$i], " ", "_")
+
+		EndIf
+
+	Next
+
+	$temp = _ArrayToString($arrayPathCSVfile, "\")
+
+	MsgBox($MB_SYSTEMMODAL, "$temp", $temp) ;;;CHECK FUNZT!!!
+
+	While NOT FileExists($temp)
+
+		sleep(50)
+
+	WEnd
+
+	WinWaitActive("Download beendet")
+	WinClose("Download beendet")
+
+	Sleep(1000)
+
+	_Process_Tree_Close($iPID)
+
+	Sleep(1000)
+
+	GUIDelete($guiEmbeddedBrowser)
+
+	Sleep(1000)
+
+	return $temp
+
+EndFunc   ;==>_Start_Tabula_with_file
