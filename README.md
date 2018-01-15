@@ -9,4 +9,5 @@ Automatization of an workflow between different software:
 Mr. Kevin Ossenbrück
 
 # On behalf of
-Umweltbundesamt to be represented by Mr. Peter von der Ohe
+Umweltbundesamt to be represented by Mr. Peter von der Ohe 
+(dept.: IV 2.2 - Medicine and chemical substances)
